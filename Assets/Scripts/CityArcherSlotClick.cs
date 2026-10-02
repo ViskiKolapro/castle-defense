@@ -21,7 +21,7 @@ public class CityArcherSlotClick : MonoBehaviour
 
     void OnMouseDown()
     {
-        if (BowMasterEvolutionController.IsEvolutionModalOpen) return;
+        if (WorldInputGuard.IsBlocked()) return;
         // Эти два квадрата должны оставаться кликабельными даже когда открыто
         // меню городских лучников, чтобы можно было быстро переключать отряды.
         if (manager == null)

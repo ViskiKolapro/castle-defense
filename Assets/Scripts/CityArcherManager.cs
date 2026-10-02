@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 [ExecuteAlways]
 public class CityArcherManager : MonoBehaviour
@@ -44,6 +44,7 @@ public class CityArcherManager : MonoBehaviour
     
     void Start()
     {
+        ApplyCurrentBalanceDefaults();
         BuildEditorObjects();
         if (!Application.isPlaying) return;
 
@@ -98,8 +99,16 @@ public class CityArcherManager : MonoBehaviour
     }
 
 
+    void ApplyCurrentBalanceDefaults()
+    {
+        // Both squads use the same current balance baseline. Combat and UI both read DamagePerArcher.
+        if (squad1 != null) squad1.baseDamage = 20f;
+        if (squad2 != null) squad2.baseDamage = 20f;
+    }
+
     public void ApplyLoadedProgress()
     {
+        ApplyCurrentBalanceDefaults();
         if (waveSpawner == null) waveSpawner = FindAnyObjectByType<WaveSpawner>();
         IsUnlocked = waveSpawner != null && waveSpawner.EffectiveCompletedWave >= 3;
         RefreshAll();

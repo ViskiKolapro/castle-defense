@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -72,8 +72,10 @@ public class HeroPanelController : MonoBehaviour
         selectedHero = bowMaster;
         Refresh();
 
-        // При запуске обе части меню героев должны быть скрыты.
+        // При запуске все модальные панели должны быть в чистом состоянии.
         ClosePanel();
+        BowMasterEvolutionController evo = BowMasterEvolutionController.EnsureFor(this);
+        if (evo != null) evo.ResetPanelsForPlay();
     }
 
     // Открытие по клику на установленного героя: статистика + список героев справа.
@@ -298,7 +300,11 @@ public class HeroPanelController : MonoBehaviour
         // Если открыли самого установленного героя на замке — можно снять.
         if (selectedHero.isInstalled)
         {
+            // Запоминаем тот же слот: после снятия кнопка сразу становится "Установить"
+            // и позволяет вернуть героя туда же без повторного клика по квадрату.
+            int previousSlot = selectedHero.installedSlot;
             heroSlotManager.RemoveHero(selectedHero);
+            selectedEmptySlot = previousSlot;
             Refresh();
         }
     }

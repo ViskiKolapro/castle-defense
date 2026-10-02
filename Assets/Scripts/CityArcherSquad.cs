@@ -11,7 +11,7 @@ public class CityArcherSquad
     [Range(0, 10)] public int archerCount = 0;
 
     [Header("Base stats of ONE archer")]
-    public float baseDamage = 8f;
+    public float baseDamage = 20f;
     [Tooltip("Полный интервал между выстрелами одного городского лучника.")]
     public float attackInterval = 0.8f;
     public float projectileSpeed = 8f;

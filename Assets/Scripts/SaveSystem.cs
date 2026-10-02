@@ -14,6 +14,8 @@ public class SaveSystem : MonoBehaviour
         public bool isInstalled;
         public int installedSlot;
         public bool evolution1Purchased;
+        public bool evolution2Purchased;
+        public int activeEvolution;
     }
 
     [Serializable] public class SquadSave
@@ -25,7 +27,7 @@ public class SaveSystem : MonoBehaviour
 
     [Serializable] public class SaveData
     {
-        public int saveVersion = 1;
+        public int saveVersion = 2;
         public int gold;
         public int emeralds;
         public int playerLevel;
@@ -97,7 +99,7 @@ public class SaveSystem : MonoBehaviour
         Castle castle = FindAnyObjectByType<Castle>();
         if (castle != null) d.castleLevel = Mathf.Max(1, castle.castleLevel);
 
-        Hero[] heroes = FindObjectsByType<Hero>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+        Hero[] heroes = FindObjectsByType<Hero>(FindObjectsInactive.Include);
         foreach (Hero h in heroes)
         {
             if (h == null || string.IsNullOrWhiteSpace(h.heroName)) continue;
@@ -108,7 +110,9 @@ public class SaveSystem : MonoBehaviour
                 isPurchased = h.isPurchased,
                 isInstalled = h.isInstalled,
                 installedSlot = h.installedSlot,
-                evolution1Purchased = h.evolution1Purchased
+                evolution1Purchased = h.evolution1Purchased,
+                evolution2Purchased = h.evolution2Purchased,
+                activeEvolution = h.activeEvolution
             });
         }
 
@@ -159,16 +163,29 @@ public class SaveSystem : MonoBehaviour
                 castle.ApplyLevelStats(true);
             }
 
-            Hero[] heroes = FindObjectsByType<Hero>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            Hero[] heroes = FindObjectsByType<Hero>(FindObjectsInactive.Include);
             foreach (Hero h in heroes)
             {
                 HeroSave hs = d.heroes.Find(x => x.heroName == h.heroName);
                 if (hs == null) continue;
+                // Scene/Inspector stores level-1 damage. Save stores the level, so rebuild
+                // permanent damage from that baseline instead of leaving it at level-1 damage.
+                float levelOneDamage = h.damage - Mathf.Max(0, h.heroLevel - 1) * h.damagePerLevel;
                 h.heroLevel = Mathf.Clamp(hs.heroLevel, 1, h.maxHeroLevel);
+                h.damage = levelOneDamage + Mathf.Max(0, h.heroLevel - 1) * h.damagePerLevel;
                 h.isPurchased = hs.isPurchased;
                 h.installedSlot = hs.isInstalled ? Mathf.Clamp(hs.installedSlot, 1, HeroSlotManager.TotalSlots) : 0;
                 h.SetInstalled(hs.isInstalled);
-                if (hs.evolution1Purchased) h.ApplyEvolution1();
+                h.evolution1Purchased = hs.evolution1Purchased || hs.evolution2Purchased;
+                h.evolution2Purchased = hs.evolution2Purchased;
+                // Backward compatibility: v1 saves had no activeEvolution field.
+                int loadedEvolution = hs.activeEvolution;
+                if (d.saveVersion < 2)
+                {
+                    if (hs.evolution2Purchased) loadedEvolution = 2;
+                    else if (hs.evolution1Purchased) loadedEvolution = 1;
+                }
+                h.SetActiveEvolution(loadedEvolution);
             }
 
             CityArcherManager archers = FindAnyObjectByType<CityArcherManager>();

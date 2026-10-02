@@ -14,7 +14,7 @@ public class EmptyHeroSlotClick : MonoBehaviour
 
     void OnMouseDown()
     {
-        if (BowMasterEvolutionController.IsEvolutionModalOpen) return;
+        if (WorldInputGuard.IsBlocked()) return;
         if (GameStateManager.Instance != null &&
             GameStateManager.Instance.currentState == GameStateManager.GameState.Battle)
         {

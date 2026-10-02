@@ -8,7 +8,7 @@ public class CastleUpgradeSlotClick : MonoBehaviour
 
     void OnMouseDown()
     {
-        if (BowMasterEvolutionController.IsEvolutionModalOpen) return;
+        if (WorldInputGuard.IsBlocked()) return;
         if (castle == null || !castle.CanOpenUpgradePanel) return;
         castle.OpenUpgradePanel();
         if (!animating) StartCoroutine(Pulse());

@@ -24,6 +24,8 @@ public class Hero : MonoBehaviour
     // Technical evolution state. Hidden from the normal Hero Inspector;
     // BowMasterEvolutionController owns these values.
     [HideInInspector] public bool evolution1Purchased = false;
+    [HideInInspector] public bool evolution2Purchased = false;
+    [HideInInspector] public int activeEvolution = 0; // 0=base, 1=Evolution I, 2=Physical Evolution II
     [HideInInspector] public float bossDamageMultiplier = 1f;
     [HideInInspector] public bool ultimateUnlocked = false;
     [HideInInspector] public float ultimateAttackSpeedBonus = 1.5f;
@@ -36,12 +38,24 @@ public class Hero : MonoBehaviour
     [Tooltip("Release sprite used after Evolution I is purchased.")]
     public Sprite evolution1ReleaseSprite;
 
+    [Header("Evolution II Physical Visuals (Bow Master)")]
+    public Sprite evolution2ReadySprite;
+    public Sprite evolution2AimSprite;
+    [Tooltip("Golden Physical Evolution II arrow prefab. Assign after creating its glow/trail version.")]
+    public GameObject evolution2ProjectilePrefab;
+    private GameObject baseProjectilePrefab;
+    private Sprite baseReadySprite, baseAimSprite, baseReleaseSprite;
+
     // Bow Master Evolution I ultimate runtime state.
     [HideInInspector] public float ultimateDuration = 3f;
     [HideInInspector] public float ultimateCooldown = 10f;
     private bool ultimateActive;
     private Coroutine ultimateRoutine;
     private float ultimateCooldownRemaining;
+    private Coroutine ultimateVisualRoutine;
+    private Color ultimateOriginalColor = Color.white;
+    private Vector3 ultimateOriginalScale;
+    private bool ultimateVisualCaptured;
     private float ultimateBaseDamage;
     private float ultimateBaseAttackCooldown;
     private GameObject ultimateBarRoot;
@@ -109,6 +123,10 @@ public class Hero : MonoBehaviour
 
     void Awake()
     {
+        if (baseProjectilePrefab == null) baseProjectilePrefab = projectilePrefab;
+        if (baseReadySprite == null) baseReadySprite = readySprite;
+        if (baseAimSprite == null) baseAimSprite = aimSprite;
+        if (baseReleaseSprite == null) baseReleaseSprite = releaseSprite;
         ApplyReadySpriteInEditor();
     }
 
@@ -308,7 +326,9 @@ public class Hero : MonoBehaviour
         {
             StopAllCoroutines();
             ultimateRoutine = null;
+            ultimateVisualRoutine = null;
             ultimateActive = false;
+            RestoreUltimateVisual();
             isAttacking = false;
             if (spriteRenderer != null && readySprite != null)
                 spriteRenderer.sprite = readySprite;
@@ -319,22 +339,78 @@ public class Hero : MonoBehaviour
         if (evolution1ReadySprite != null) readySprite = evolution1ReadySprite;
         if (evolution1AimSprite != null) aimSprite = evolution1AimSprite;
         if (evolution1ReleaseSprite != null) releaseSprite = evolution1ReleaseSprite;
+        if (baseProjectilePrefab != null) projectilePrefab = baseProjectilePrefab;
+        RefreshCurrentSprite();
+    }
 
-        if (spriteRenderer == null)
-            spriteRenderer = GetComponent<SpriteRenderer>();
-        if (spriteRenderer != null && readySprite != null && !isAttacking)
-            spriteRenderer.sprite = readySprite;
+    public void ApplyEvolution2Visuals()
+    {
+        if (evolution2ReadySprite != null) readySprite = evolution2ReadySprite;
+        if (evolution2AimSprite != null) aimSprite = evolution2AimSprite;
+        // Physical Evolution II intentionally uses only two poses: Ready and Aim.
+        // The Aim pose is also used for the tiny post-shot phase.
+        if (evolution2AimSprite != null) releaseSprite = evolution2AimSprite;
+        if (evolution2ProjectilePrefab != null) projectilePrefab = evolution2ProjectilePrefab;
+        else if (baseProjectilePrefab != null) projectilePrefab = baseProjectilePrefab;
+        RefreshCurrentSprite();
+    }
+
+    void RefreshCurrentSprite()
+    {
+        if (spriteRenderer == null) spriteRenderer = GetComponent<SpriteRenderer>();
+        if (spriteRenderer != null && readySprite != null && !isAttacking) spriteRenderer.sprite = readySprite;
     }
 
     public void ApplyEvolution1()
     {
         evolution1Purchased = true;
-        attackCooldown = 0.5f;
-        bossDamageMultiplier = 3f;
-        ultimateUnlocked = true;
-        ultimateAttackSpeedBonus = 1.5f;
-        ultimateDamageBonus = 1.5f;
-        ApplyEvolution1Visuals();
+        SetActiveEvolution(1);
+    }
+
+    public void ApplyEvolution2()
+    {
+        if (!evolution1Purchased) evolution1Purchased = true;
+        evolution2Purchased = true;
+        SetActiveEvolution(2);
+    }
+
+    public void SetActiveEvolution(int evolution)
+    {
+        if (evolution == 2 && !evolution2Purchased) evolution = evolution1Purchased ? 1 : 0;
+        if (evolution == 1 && !evolution1Purchased) evolution = 0;
+        activeEvolution = Mathf.Clamp(evolution, 0, 2);
+
+        if (activeEvolution == 2)
+        {
+            attackCooldown = 0.25f;
+            bossDamageMultiplier = 6f;
+            ultimateUnlocked = true;
+            ultimateAttackSpeedBonus = 3f;
+            ultimateDamageBonus = 3f;
+            ApplyEvolution2Visuals();
+        }
+        else if (activeEvolution == 1)
+        {
+            attackCooldown = 0.5f;
+            bossDamageMultiplier = 3f;
+            ultimateUnlocked = true;
+            ultimateAttackSpeedBonus = 1.5f;
+            ultimateDamageBonus = 1.5f;
+            ApplyEvolution1Visuals();
+        }
+        else
+        {
+            attackCooldown = 1f;
+            bossDamageMultiplier = 1f;
+            ultimateUnlocked = false;
+            ultimateAttackSpeedBonus = 1.5f;
+            ultimateDamageBonus = 1.5f;
+            if (baseReadySprite != null) readySprite = baseReadySprite;
+            if (baseAimSprite != null) aimSprite = baseAimSprite;
+            if (baseReleaseSprite != null) releaseSprite = baseReleaseSprite;
+            if (baseProjectilePrefab != null) projectilePrefab = baseProjectilePrefab;
+            RefreshCurrentSprite();
+        }
         EnsureUltimateBar();
         UpdateUltimateBar();
     }
@@ -353,13 +429,63 @@ public class Hero : MonoBehaviour
     {
         ultimateActive = true;
         ultimateCooldownRemaining = Mathf.Max(0.01f, ultimateCooldown);
+        StartUltimateVisual();
         UpdateUltimateBar();
 
         yield return new WaitForSeconds(Mathf.Max(0.01f, ultimateDuration));
 
         ultimateActive = false;
         ultimateRoutine = null;
+        StopUltimateVisual();
         UpdateUltimateBar();
+    }
+
+    void StartUltimateVisual()
+    {
+        if (spriteRenderer == null) spriteRenderer = GetComponent<SpriteRenderer>();
+        if (spriteRenderer == null) return;
+
+        if (!ultimateVisualCaptured)
+        {
+            ultimateOriginalColor = spriteRenderer.color;
+            ultimateOriginalScale = transform.localScale;
+            ultimateVisualCaptured = true;
+        }
+
+        if (ultimateVisualRoutine != null) StopCoroutine(ultimateVisualRoutine);
+        ultimateVisualRoutine = StartCoroutine(UltimateVisualRoutine());
+    }
+
+    IEnumerator UltimateVisualRoutine()
+    {
+        // Visible gold pulse for the whole ultimate. It works with Evolution I and II
+        // because it is applied to the current SpriteRenderer rather than a specific sprite.
+        while (ultimateActive)
+        {
+            float pulse = (Mathf.Sin(Time.time * 14f) + 1f) * 0.5f;
+            spriteRenderer.color = Color.Lerp(Color.white, new Color(1f, 0.82f, 0.35f, 1f), 0.35f + pulse * 0.45f);
+            transform.localScale = ultimateOriginalScale * Mathf.Lerp(1.02f, 1.07f, pulse);
+            yield return null;
+        }
+        RestoreUltimateVisual();
+        ultimateVisualRoutine = null;
+    }
+
+    void StopUltimateVisual()
+    {
+        if (ultimateVisualRoutine != null)
+        {
+            StopCoroutine(ultimateVisualRoutine);
+            ultimateVisualRoutine = null;
+        }
+        RestoreUltimateVisual();
+    }
+
+    void RestoreUltimateVisual()
+    {
+        if (!ultimateVisualCaptured) return;
+        if (spriteRenderer != null) spriteRenderer.color = ultimateOriginalColor;
+        transform.localScale = ultimateOriginalScale;
     }
 
     // Called by WaveSpawner when a NEW wave actually starts. Every wave begins
@@ -373,6 +499,7 @@ public class Hero : MonoBehaviour
             ultimateRoutine = null;
         }
         ultimateActive = false;
+        StopUltimateVisual();
         ultimateCooldownRemaining = 0f;
         UpdateUltimateBar();
     }
@@ -405,13 +532,47 @@ public class Hero : MonoBehaviour
         // HeroUltimateBarBackground -> HeroUltimateBarFill.
         Transform background = FindSceneTransform("HeroUltimateBarBackground");
         Transform fill = FindSceneTransform("HeroUltimateBarFill");
-        if (background == null || fill == null) return;
+
+        // If the manually-created bar is missing/broken, build a small runtime bar
+        // on the existing screen-space Canvas. This makes the ultimate indicator
+        // reliable and does not touch the user's saved UI layout.
+        if (background == null || fill == null || fill.GetComponent<Image>() == null)
+        {
+            Canvas canvas = FindFirstObjectByType<Canvas>();
+            if (canvas == null) return;
+
+            GameObject bgGO = new GameObject("HeroUltimateBarBackground", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            bgGO.transform.SetParent(canvas.transform, false);
+            RectTransform bgRT = bgGO.GetComponent<RectTransform>();
+            bgRT.sizeDelta = new Vector2(70f, 7f);
+            Image bgImage = bgGO.GetComponent<Image>();
+            bgImage.color = new Color(0.10f, 0.10f, 0.10f, 0.85f);
+            bgImage.raycastTarget = false;
+
+            GameObject fillGO = new GameObject("HeroUltimateBarFill", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            fillGO.transform.SetParent(bgGO.transform, false);
+            RectTransform fillRT = fillGO.GetComponent<RectTransform>();
+            fillRT.anchorMin = new Vector2(0f, 0f);
+            fillRT.anchorMax = new Vector2(1f, 1f);
+            fillRT.pivot = new Vector2(0f, 0.5f);
+            fillRT.offsetMin = Vector2.zero;
+            fillRT.offsetMax = Vector2.zero;
+            Image fillImage = fillGO.GetComponent<Image>();
+            fillImage.color = new Color(0.15f, 1f, 0.20f, 1f);
+            fillImage.raycastTarget = false;
+
+            background = bgGO.transform;
+            fill = fillGO.transform;
+        }
 
         ultimateBarRoot = background.gameObject;
         ultimateBarRect = background as RectTransform;
         ultimateBarFill = fill.GetComponent<Image>();
         ultimateBarCanvas = background.GetComponentInParent<Canvas>();
 
+        // Recalculate from a known offset every time the bar is bound. The bar
+        // sits just above the installed hero and follows him if the slot changes.
+        ultimateBarOffsetCaptured = false;
         CaptureUltimateBarOffset();
     }
 
@@ -439,8 +600,10 @@ public class Hero : MonoBehaviour
         Vector2 screenPoint = worldCamera.WorldToScreenPoint(transform.position);
         if (RectTransformUtility.ScreenPointToLocalPointInRectangle(parentRect, screenPoint, uiCamera, out Vector2 heroLocalPoint))
         {
-            // Preserve exactly where the user placed the bar relative to Bow Master.
-            ultimateBarScreenOffset = ultimateBarRect.anchoredPosition - heroLocalPoint;
+            // Fixed screen-space offset: directly above the hero. This avoids the
+            // bar disappearing because of an old/manual anchored position.
+            ultimateBarScreenOffset = new Vector2(0f, 45f);
+            ultimateBarRect.anchoredPosition = heroLocalPoint + ultimateBarScreenOffset;
             ultimateBarOffsetCaptured = true;
         }
     }
@@ -481,6 +644,11 @@ public class Hero : MonoBehaviour
             ? 1f
             : 1f - Mathf.Clamp01(ultimateCooldownRemaining / ultimateCooldown);
         ultimateBarFill.fillAmount = progress;
+        RectTransform fillRect = ultimateBarFill.rectTransform;
+        fillRect.anchorMin = new Vector2(0f, 0f);
+        fillRect.anchorMax = new Vector2(progress, 1f);
+        fillRect.offsetMin = Vector2.zero;
+        fillRect.offsetMax = Vector2.zero;
     }
 
 
