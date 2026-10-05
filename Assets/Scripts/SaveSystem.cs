@@ -32,7 +32,7 @@ public class SaveSystem : MonoBehaviour
 
     [Serializable] public class SaveData
     {
-        public int saveVersion = 5;
+        public int saveVersion = 6;
         public int gold;
         public int emeralds;
         public int playerLevel;
@@ -206,7 +206,11 @@ public class SaveSystem : MonoBehaviour
                 h.victoriaBlueEvolution1Purchased = hs.victoriaBlueEvolution1Purchased || hs.victoriaBlueEvolution2Purchased;
                 h.victoriaBlueEvolution2Purchased = hs.victoriaBlueEvolution2Purchased;
                 int loadedVictoriaEvolution = hs.victoriaActiveEvolution;
-                if (d.saveVersion < 3 && loadedVictoriaEvolution == 0)
+                // v6 repairs Victoria saves from the broken evolution patch where ownership
+                // could survive but activeEvolution was written/read back as 0. For older
+                // saves restore the strongest owned evolution. From v6 onward 0 remains an
+                // intentional unequipped state.
+                if (d.saveVersion < 6 && loadedVictoriaEvolution == 0 && h.heroName == "Victoria")
                 {
                     if (hs.victoriaBlueEvolution2Purchased) loadedVictoriaEvolution = 4;
                     else if (hs.victoriaRedEvolution2Purchased) loadedVictoriaEvolution = 2;

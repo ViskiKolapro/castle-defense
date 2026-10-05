@@ -86,8 +86,8 @@ public class VictoriaEvolutionController : MonoBehaviour
     void CloseTree(){ if(tree!=null) tree.SetActive(false); HideInfos(); SetBlock(false); }
     void ReturnToTree(){ HideInfos(); if(tree!=null){tree.SetActive(true); tree.transform.SetAsLastSibling();} SetBlock(true); Refresh(); }
     void OpenInfo(GameObject info){ if(info==null)return; if(tree!=null)tree.SetActive(false); HideInfos(); info.SetActive(true); SetBlock(true); info.transform.SetAsLastSibling(); Refresh(); }
-    void OpenRed2(){ if(victoria==null || !victoria.victoriaRedEvolution1Purchased) return; OpenInfo(red2Info); }
-    void OpenBlue2(){ if(victoria==null || !victoria.victoriaBlueEvolution1Purchased) return; OpenInfo(blue2Info); }
+    void OpenRed2(){ OpenInfo(red2Info); }
+    void OpenBlue2(){ OpenInfo(blue2Info); }
     void HideInfos(){ if(red1Info!=null)red1Info.SetActive(false); if(red2Info!=null)red2Info.SetActive(false); if(blue1Info!=null)blue1Info.SetActive(false); if(blue2Info!=null)blue2Info.SetActive(false); }
 
     void ToggleRed1()
@@ -99,9 +99,16 @@ public class VictoriaEvolutionController : MonoBehaviour
     }
     void ToggleRed2()
     {
-        if(victoria==null || !victoria.victoriaRedEvolution1Purchased)return;
-        if(!victoria.victoriaRedEvolution2Purchased){ if(!Spend(20))return; victoria.victoriaRedEvolution2Purchased=true; victoria.SetVictoriaActiveEvolution(2); }
-        else victoria.SetVictoriaActiveEvolution(2);
+        if(victoria==null)return;
+        // Evolution II can always be inspected/bought. Buying II also unlocks I,
+        // but II itself becomes active immediately (never stop on Evolution I).
+        if(!victoria.victoriaRedEvolution2Purchased)
+        {
+            if(!Spend(20))return;
+            victoria.victoriaRedEvolution1Purchased=true;
+            victoria.victoriaRedEvolution2Purchased=true;
+        }
+        victoria.SetVictoriaActiveEvolution(2);
         SaveEvolutionState(); Refresh();
     }
     void ToggleBlue1()
@@ -113,9 +120,16 @@ public class VictoriaEvolutionController : MonoBehaviour
     }
     void ToggleBlue2()
     {
-        if(victoria==null || !victoria.victoriaBlueEvolution1Purchased)return;
-        if(!victoria.victoriaBlueEvolution2Purchased){ if(!Spend(20))return; victoria.victoriaBlueEvolution2Purchased=true; victoria.SetVictoriaActiveEvolution(4); }
-        else victoria.SetVictoriaActiveEvolution(4);
+        if(victoria==null)return;
+        // Same rule for the blue branch: II is directly available. Buying it
+        // unlocks I as ownership history, while II becomes active immediately.
+        if(!victoria.victoriaBlueEvolution2Purchased)
+        {
+            if(!Spend(20))return;
+            victoria.victoriaBlueEvolution1Purchased=true;
+            victoria.victoriaBlueEvolution2Purchased=true;
+        }
+        victoria.SetVictoriaActiveEvolution(4);
         SaveEvolutionState(); Refresh();
     }
     void SaveEvolutionState(){ var s=FindAnyObjectByType<SaveSystem>(); if(s!=null) s.Save(); }
@@ -127,15 +141,21 @@ public class VictoriaEvolutionController : MonoBehaviour
         // Gold means ACTIVE path, not merely purchased.
         for(int i=0;i<lines.Length;i++) if(lines[i]!=null) lines[i].color=dark;
         int a=victoria.victoriaActiveEvolution;
-        // Exact branch mapping. Blue uses only its own central branch: Line5 -> Blue I, Line6 -> Blue II.
-        if(a==1 || a==2) { Paint(0); Paint(1); Paint(2); }
+        // Exact tree mapping:
+        // Red I  = Line1 + Line2 + Line3
+        // Red II = Line1 + Line2 + Line3 + Line4
+        // Blue I = Line1 + Line2 + Line5
+        // Blue II= Line1 + Line2 + Line5 + Line6
+        // Line1/2 are the shared central path. This fixes the missing central segment.
+        if(a==1 || a==2 || a==3 || a==4) { Paint(0); Paint(1); }
+        if(a==1 || a==2) Paint(2);
         if(a==2) Paint(3);
         if(a==3 || a==4) Paint(4);
         if(a==4) Paint(5);
         if(red1Buy!=null) red1Buy.interactable=victoria.victoriaRedEvolution1Purchased || CanAfford(10);
-        if(red2Buy!=null) red2Buy.interactable=victoria.victoriaRedEvolution1Purchased && (victoria.victoriaRedEvolution2Purchased || CanAfford(20));
+        if(red2Buy!=null) red2Buy.interactable=victoria.victoriaRedEvolution2Purchased || CanAfford(20);
         if(blue1Buy!=null) blue1Buy.interactable=victoria.victoriaBlueEvolution1Purchased || CanAfford(10);
-        if(blue2Buy!=null) blue2Buy.interactable=victoria.victoriaBlueEvolution1Purchased && (victoria.victoriaBlueEvolution2Purchased || CanAfford(20));
+        if(blue2Buy!=null) blue2Buy.interactable=victoria.victoriaBlueEvolution2Purchased || CanAfford(20);
     }
     void Paint(int i){ if(i>=0&&i<lines.Length&&lines[i]!=null) lines[i].color=gold; }
     bool CanAfford(int n){ return PlayerProgress.Instance!=null && PlayerProgress.Instance.emeralds>=n; }
