@@ -94,6 +94,20 @@ public class CityArcherUnit : MonoBehaviour
         isAttacking = false;
     }
 
+    public void ResetCombatStateAfterWave()
+    {
+        if (!Application.isPlaying) return;
+
+        StopAllCoroutines();
+        isAttacking = false;
+        attackTimer = 0f;
+
+        if (spriteRenderer == null)
+            spriteRenderer = GetComponent<SpriteRenderer>();
+        if (spriteRenderer != null && readySprite != null)
+            spriteRenderer.sprite = readySprite;
+    }
+
     Enemy FindRandomTarget()
     {
         Enemy[] enemies = FindObjectsByType<Enemy>(FindObjectsSortMode.None);

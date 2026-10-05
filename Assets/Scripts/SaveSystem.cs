@@ -16,6 +16,11 @@ public class SaveSystem : MonoBehaviour
         public bool evolution1Purchased;
         public bool evolution2Purchased;
         public int activeEvolution;
+        public bool victoriaRedEvolution1Purchased;
+        public bool victoriaRedEvolution2Purchased;
+        public bool victoriaBlueEvolution1Purchased;
+        public bool victoriaBlueEvolution2Purchased;
+        public int victoriaActiveEvolution;
     }
 
     [Serializable] public class SquadSave
@@ -27,7 +32,7 @@ public class SaveSystem : MonoBehaviour
 
     [Serializable] public class SaveData
     {
-        public int saveVersion = 2;
+        public int saveVersion = 5;
         public int gold;
         public int emeralds;
         public int playerLevel;
@@ -112,7 +117,12 @@ public class SaveSystem : MonoBehaviour
                 installedSlot = h.installedSlot,
                 evolution1Purchased = h.evolution1Purchased,
                 evolution2Purchased = h.evolution2Purchased,
-                activeEvolution = h.activeEvolution
+                activeEvolution = h.activeEvolution,
+                victoriaRedEvolution1Purchased = h.victoriaRedEvolution1Purchased,
+                victoriaRedEvolution2Purchased = h.victoriaRedEvolution2Purchased,
+                victoriaBlueEvolution1Purchased = h.victoriaBlueEvolution1Purchased,
+                victoriaBlueEvolution2Purchased = h.victoriaBlueEvolution2Purchased,
+                victoriaActiveEvolution = h.victoriaActiveEvolution
             });
         }
 
@@ -178,14 +188,32 @@ public class SaveSystem : MonoBehaviour
                 h.SetInstalled(hs.isInstalled);
                 h.evolution1Purchased = hs.evolution1Purchased || hs.evolution2Purchased;
                 h.evolution2Purchased = hs.evolution2Purchased;
-                // Backward compatibility: v1 saves had no activeEvolution field.
+                // Backward compatibility: active evolution was introduced after older saves
+                // were already using saveVersion 2. Treat every pre-v3 save as legacy so an
+                // already purchased Bow Master evolution cannot silently become unequipped.
                 int loadedEvolution = hs.activeEvolution;
-                if (d.saveVersion < 2)
+                // v4 repairs saves written by the first Victoria patch: those saves could
+                // preserve Bow Master ownership but accidentally write activeEvolution=0.
+                // From v4 onward 0 is a real, intentional unequipped state and is preserved.
+                if (d.saveVersion < 5 && loadedEvolution == 0 && h.heroName == "Bow Master")
                 {
                     if (hs.evolution2Purchased) loadedEvolution = 2;
                     else if (hs.evolution1Purchased) loadedEvolution = 1;
                 }
                 h.SetActiveEvolution(loadedEvolution);
+                h.victoriaRedEvolution1Purchased = hs.victoriaRedEvolution1Purchased || hs.victoriaRedEvolution2Purchased;
+                h.victoriaRedEvolution2Purchased = hs.victoriaRedEvolution2Purchased;
+                h.victoriaBlueEvolution1Purchased = hs.victoriaBlueEvolution1Purchased || hs.victoriaBlueEvolution2Purchased;
+                h.victoriaBlueEvolution2Purchased = hs.victoriaBlueEvolution2Purchased;
+                int loadedVictoriaEvolution = hs.victoriaActiveEvolution;
+                if (d.saveVersion < 3 && loadedVictoriaEvolution == 0)
+                {
+                    if (hs.victoriaBlueEvolution2Purchased) loadedVictoriaEvolution = 4;
+                    else if (hs.victoriaRedEvolution2Purchased) loadedVictoriaEvolution = 2;
+                    else if (hs.victoriaRedEvolution1Purchased) loadedVictoriaEvolution = 1;
+                    else if (hs.victoriaBlueEvolution1Purchased) loadedVictoriaEvolution = 3;
+                }
+                h.SetVictoriaActiveEvolution(loadedVictoriaEvolution);
             }
 
             CityArcherManager archers = FindAnyObjectByType<CityArcherManager>();

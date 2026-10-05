@@ -102,8 +102,8 @@ public class CityArcherManager : MonoBehaviour
     void ApplyCurrentBalanceDefaults()
     {
         // Both squads use the same current balance baseline. Combat and UI both read DamagePerArcher.
-        if (squad1 != null) squad1.baseDamage = 20f;
-        if (squad2 != null) squad2.baseDamage = 20f;
+        if (squad1 != null) { squad1.baseDamage = 25f; squad1.damagePerLevelAfterTenArchers = 10f; }
+        if (squad2 != null) { squad2.baseDamage = 25f; squad2.damagePerLevelAfterTenArchers = 10f; }
     }
 
     public void ApplyLoadedProgress()

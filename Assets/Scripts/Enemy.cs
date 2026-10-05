@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 public class Enemy : MonoBehaviour
 {
@@ -42,6 +42,9 @@ public class Enemy : MonoBehaviour
 
     // Урон снарядов, которые уже летят в этого врага.
     private float reservedIncomingDamage;
+    private float bleedRemaining;
+    private float bleedDamagePerSecond;
+    private float bleedSlowFraction;
 
     void Start()
     {
@@ -59,6 +62,8 @@ public class Enemy : MonoBehaviour
     {
         if (dead)
             return;
+
+        UpdateBleeding();
 
         if (castle == null)
             castle = FindAnyObjectByType<Castle>();
@@ -87,7 +92,7 @@ public class Enemy : MonoBehaviour
         if (transform.position.x > stopX)
         {
             // Движение только по X: каждый враг сохраняет свою линию по Y.
-            float newX = Mathf.MoveTowards(transform.position.x, stopX, moveSpeed * Time.deltaTime);
+            float newX = Mathf.MoveTowards(transform.position.x, stopX, moveSpeed * (bleedRemaining > 0f ? 1f - bleedSlowFraction : 1f) * Time.deltaTime);
             transform.position = new Vector3(newX, targetY, transform.position.z);
         }
         else
@@ -139,17 +144,14 @@ public class Enemy : MonoBehaviour
         TakePreparedDamage(PrepareIncomingDamage(damage));
     }
 
-    public void TakePreparedDamage(float damage)
+    public float TakePreparedDamage(float damage)
     {
-        if (dead)
-            return;
+        if (dead || damage <= 0f) return 0f;
 
-        // Уклонение/нулевой урон не должны раскрывать HP-полоску.
-        if (damage <= 0f)
-            return;
-
+        float before = currentHealth;
         currentHealth -= damage;
         currentHealth = Mathf.Clamp(currentHealth, 0f, maxHealth);
+        float actualDamage = Mathf.Max(0f, before - currentHealth);
 
         UpdateHealthBar();
 
@@ -158,9 +160,10 @@ public class Enemy : MonoBehaviour
 
         if (currentHealth <= 0f)
             Die();
+        return actualDamage;
     }
 
-    public float PrepareIncomingDamage(float incomingDamage)
+    public float PrepareIncomingDamage(float incomingDamage, bool ignoreDodge = false)
     {
         float result = Mathf.Max(0f, incomingDamage);
 
@@ -169,7 +172,7 @@ public class Enemy : MonoBehaviour
             return result;
 
         // Melee and Ranged can dodge.
-        if (Random.value < Mathf.Clamp01(dodgeChance))
+        if (!ignoreDodge && Random.value < Mathf.Clamp01(dodgeChance))
             return 0f;
 
         // Block is exclusive to Melee.
@@ -177,6 +180,29 @@ public class Enemy : MonoBehaviour
             result *= 1f - Mathf.Clamp01(blockDamageReduction);
 
         return result;
+    }
+
+    public void ApplyBleeding(float duration, float slowFraction, float maxHealthFractionPerProc)
+    {
+        if (dead || duration <= 0f) return;
+        // Extending effect: every proc adds its duration; it does not create a second independent status.
+        bleedRemaining += duration;
+        bleedSlowFraction = Mathf.Max(bleedSlowFraction, Mathf.Clamp01(slowFraction));
+        bleedDamagePerSecond = Mathf.Max(bleedDamagePerSecond, maxHealth * Mathf.Max(0f, maxHealthFractionPerProc) / duration);
+    }
+
+    void UpdateBleeding()
+    {
+        if (bleedRemaining <= 0f || dead) return;
+        float dt = Mathf.Min(Time.deltaTime, bleedRemaining);
+        bleedRemaining -= dt;
+        if (bleedDamagePerSecond > 0f) TakePreparedDamage(bleedDamagePerSecond * dt);
+        if (bleedRemaining <= 0f)
+        {
+            bleedRemaining = 0f;
+            bleedDamagePerSecond = 0f;
+            bleedSlowFraction = 0f;
+        }
     }
 
     void CacheHealthBarVisuals()

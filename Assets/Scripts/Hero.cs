@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
@@ -43,6 +43,21 @@ public class Hero : MonoBehaviour
     public Sprite evolution2AimSprite;
     [Tooltip("Golden Physical Evolution II arrow prefab. Assign after creating its glow/trail version.")]
     public GameObject evolution2ProjectilePrefab;
+
+    [Header("Victoria Evolution Visuals")]
+    public Sprite victoriaRedEvolution1ReadySprite;
+    public Sprite victoriaRedEvolution1AimSprite;
+    public Sprite victoriaRedEvolution2ReadySprite;
+    public Sprite victoriaRedEvolution2AimSprite;
+    public Sprite victoriaBlueEvolution1ReadySprite;
+    public Sprite victoriaBlueEvolution1AimSprite;
+    public Sprite victoriaBlueEvolution2ReadySprite;
+    public Sprite victoriaBlueEvolution2AimSprite;
+    [HideInInspector] public bool victoriaRedEvolution1Purchased;
+    [HideInInspector] public bool victoriaRedEvolution2Purchased;
+    [HideInInspector] public bool victoriaBlueEvolution1Purchased;
+    [HideInInspector] public bool victoriaBlueEvolution2Purchased;
+    [HideInInspector] public int victoriaActiveEvolution; // 0=base, 1=red I, 2=red II, 3=blue I, 4=blue II
     private GameObject baseProjectilePrefab;
     private Sprite baseReadySprite, baseAimSprite, baseReleaseSprite;
 
@@ -80,9 +95,9 @@ public class Hero : MonoBehaviour
     [Tooltip("Сколько показывать состояние после выстрела.")]
     public float releaseTime = 0.10f;
 
-    [Header("Upgrade 1-100")]
+    [Header("Upgrade 1-200")]
     public int heroLevel = 1;
-    public int maxHeroLevel = 100;
+    public int maxHeroLevel = 200;
     public float damagePerLevel = 5f;
     public int firstUpgradeCost = 20;
     public int upgradeCostIncrease = 10;
@@ -105,7 +120,15 @@ public class Hero : MonoBehaviour
         get
         {
             if (heroLevel >= maxHeroLevel) return 0;
-            return firstUpgradeCost + (heroLevel - 1) * upgradeCostIncrease;
+
+            // Levels 1-100 keep the original progression.
+            // From level 100 onward, every next upgrade costs +100 gold
+            // compared with the previous upgrade price.
+            if (heroLevel < 100)
+                return firstUpgradeCost + (heroLevel - 1) * upgradeCostIncrease;
+
+            int costToReachLevel100 = firstUpgradeCost + 98 * upgradeCostIncrease;
+            return costToReachLevel100 + (heroLevel - 99) * 100;
         }
     }
 
@@ -113,16 +136,40 @@ public class Hero : MonoBehaviour
 
     // Ultimate modifiers are runtime-only. They never overwrite the permanent
     // damage/attackCooldown values shown in the hero card.
-    public float EffectiveAttackCooldown => ultimateActive
-        ? attackCooldown / (1f + Mathf.Max(0f, ultimateAttackSpeedBonus))
-        : attackCooldown;
+    private bool IsVictoria => heroName == "Victoria";
+    private float VictoriaAttackSpeedMultiplier => IsVictoria && victoriaActiveEvolution != 0 ? 2.5f : 1f; // +150% attack speed
+    // Additive damage-buff layer. Percent bonuses in this layer are summed first,
+    // then applied to the hero's normal level-scaled base damage.
+    // Victoria Evolution I/II/Blue I currently each provide +100% base damage.
+    public float AdditiveDamageBonusPercent => IsVictoria && victoriaActiveEvolution != 0 ? 1f : 0f;
 
-    public float EffectiveDamage => ultimateActive
-        ? damage * (1f + Mathf.Max(0f, ultimateDamageBonus))
-        : damage;
+    public float EffectiveAttackCooldown
+    {
+        get
+        {
+            float value = attackCooldown / VictoriaAttackSpeedMultiplier;
+            if (ultimateActive) value /= (1f + Mathf.Max(0f, ultimateAttackSpeedBonus));
+            return Mathf.Max(0.01f, value);
+        }
+    }
+
+    public float EffectiveDamage
+    {
+        get
+        {
+            float value = damage * (1f + Mathf.Max(0f, AdditiveDamageBonusPercent));
+            // Runtime/upper-layer multipliers are applied after the additive buff layer.
+            if (ultimateActive) value *= 1f + Mathf.Max(0f, ultimateDamageBonus);
+            return value;
+        }
+    }
+
+    public float EffectiveCritChance => Mathf.Clamp01(critChance + (IsVictoria && victoriaActiveEvolution == 2 ? 0.05f : 0f));
+    public bool VictoriaNeverMisses => IsVictoria && (victoriaActiveEvolution == 3 || victoriaActiveEvolution == 4);
 
     void Awake()
     {
+        maxHeroLevel = 200;
         if (baseProjectilePrefab == null) baseProjectilePrefab = projectilePrefab;
         if (baseReadySprite == null) baseReadySprite = readySprite;
         if (baseAimSprite == null) baseAimSprite = aimSprite;
@@ -137,6 +184,7 @@ public class Hero : MonoBehaviour
 
     void OnValidate()
     {
+        maxHeroLevel = 200;
         ApplyReadySpriteInEditor();
     }
 
@@ -239,7 +287,7 @@ public class Hero : MonoBehaviour
 
     void SelectRandomTarget(bool avoidExpectedDead)
     {
-        Enemy[] enemies = FindObjectsByType<Enemy>(FindObjectsSortMode.None);
+        Enemy[] enemies = FindObjectsByType<Enemy>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
         List<Enemy> candidates = new List<Enemy>();
 
         foreach (Enemy enemy in enemies)
@@ -271,14 +319,14 @@ public class Hero : MonoBehaviour
         // Dodge/block are rolled NOW, before the arrow is launched. The exact
         // final damage is what gets reserved, so targeting knows whether this
         // projectile will really finish the enemy. It is not rolled again on hit.
-        shotDamage = target.PrepareIncomingDamage(shotDamage);
+        shotDamage = target.PrepareIncomingDamage(shotDamage, VictoriaNeverMisses);
         target.ReserveIncomingDamage(shotDamage);
 
         GameObject arrow = Instantiate(projectilePrefab, firePoint.position, Quaternion.identity);
         Projectile projectile = arrow.GetComponent<Projectile>();
 
         if (projectile != null)
-            projectile.SetTarget(target, shotDamage, projectileSpeed);
+            projectile.SetTarget(target, shotDamage, projectileSpeed, this);
         else
             target.ReleaseIncomingDamage(shotDamage);
     }
@@ -289,8 +337,44 @@ public class Hero : MonoBehaviour
             return EffectiveDamage;
 
         float baseDamage = EffectiveDamage;
-        bool critical = Random.value < Mathf.Clamp01(critChance);
+        bool critical = Random.value < EffectiveCritChance;
         return critical ? baseDamage * Mathf.Max(1f, critMultiplier) : baseDamage;
+    }
+
+    public void OnProjectileHit(Enemy target, float actualDamage)
+    {
+        if (!IsVictoria || victoriaActiveEvolution == 0 || target == null || actualDamage <= 0f) return;
+
+        float hpVamp = victoriaActiveEvolution == 1 ? 0.08f : victoriaActiveEvolution == 2 ? 0.20f : victoriaActiveEvolution == 3 ? 0.05f : victoriaActiveEvolution == 4 ? 0.08f : 0f;
+        float manaVamp = victoriaActiveEvolution == 3 ? 0.05f : victoriaActiveEvolution == 4 ? 0.08f : 0f;
+        Castle castle = FindAnyObjectByType<Castle>();
+        if (castle != null)
+        {
+            if (hpVamp > 0f) castle.AddHealth(actualDamage * hpVamp);
+            if (manaVamp > 0f) castle.AddMana(actualDamage * manaVamp);
+        }
+
+        if (victoriaActiveEvolution == 1 || victoriaActiveEvolution == 2)
+        {
+            float chance = victoriaActiveEvolution == 2 ? 0.50f : 0.10f;
+            if (Random.value < chance) target.ApplyBleeding(3f, 0.25f, 0.04f);
+        }
+
+        if (victoriaActiveEvolution == 4)
+        {
+            // Blue II: after the normal hit, deal an immediate extra 1% of target Max HP.
+            // The bonus ignores dodge/block because the projectile already connected.
+            if (!target.IsDead) target.TakePreparedDamage(target.maxHealth * 0.01f);
+
+            // If Victoria's hit (normal or the extra 1%) killed the target, convert its FULL Max HP
+            // into castle resources: 50% HP + 50% mana, capped by Castle.AddHealth/AddMana.
+            if (target.IsDead && castle != null)
+            {
+                float halfMaxHp = target.maxHealth * 0.50f;
+                castle.AddHealth(halfMaxHp);
+                castle.AddMana(halfMaxHp);
+            }
+        }
     }
 
     public bool TryUpgrade()
@@ -376,6 +460,14 @@ public class Hero : MonoBehaviour
 
     public void SetActiveEvolution(int evolution)
     {
+        // The legacy evolution1/evolution2 fields belong to Bow Master only.
+        // Other heroes keep their own base combat values and use their own evolution state.
+        if (!string.Equals(heroName, "Bow Master", System.StringComparison.OrdinalIgnoreCase))
+        {
+            activeEvolution = 0;
+            return;
+        }
+
         if (evolution == 2 && !evolution2Purchased) evolution = evolution1Purchased ? 1 : 0;
         if (evolution == 1 && !evolution1Purchased) evolution = 0;
         activeEvolution = Mathf.Clamp(evolution, 0, 2);
@@ -413,6 +505,34 @@ public class Hero : MonoBehaviour
         }
         EnsureUltimateBar();
         UpdateUltimateBar();
+    }
+
+    public void SetVictoriaActiveEvolution(int evolution)
+    {
+        // Victoria state must never overwrite Bow Master's already-loaded evolution visuals.
+        if (!IsVictoria)
+        {
+            victoriaActiveEvolution = 0;
+            return;
+        }
+
+        if (evolution == 2 && !victoriaRedEvolution2Purchased) evolution = victoriaRedEvolution1Purchased ? 1 : 0;
+        if (evolution == 1 && !victoriaRedEvolution1Purchased) evolution = 0;
+        if (evolution == 3 && !victoriaBlueEvolution1Purchased) evolution = 0;
+        if (evolution == 4 && !victoriaBlueEvolution2Purchased) evolution = victoriaBlueEvolution1Purchased ? 3 : 0;
+        victoriaActiveEvolution = Mathf.Clamp(evolution, 0, 4);
+
+        Sprite r = baseReadySprite, a = baseAimSprite, rel = baseReleaseSprite;
+        if (victoriaActiveEvolution == 1) { r = victoriaRedEvolution1ReadySprite; a = victoriaRedEvolution1AimSprite; rel = a; }
+        else if (victoriaActiveEvolution == 2) { r = victoriaRedEvolution2ReadySprite; a = victoriaRedEvolution2AimSprite; rel = a; }
+        else if (victoriaActiveEvolution == 3) { r = victoriaBlueEvolution1ReadySprite; a = victoriaBlueEvolution1AimSprite; rel = a; }
+        else if (victoriaActiveEvolution == 4) { r = victoriaBlueEvolution2ReadySprite; a = victoriaBlueEvolution2AimSprite; rel = a; }
+
+        if (r != null) readySprite = r;
+        if (a != null) aimSprite = a;
+        if (rel != null) releaseSprite = rel;
+        if (baseProjectilePrefab != null) projectilePrefab = baseProjectilePrefab;
+        RefreshCurrentSprite();
     }
 
     public bool TryActivateUltimate()
@@ -488,6 +608,31 @@ public class Hero : MonoBehaviour
         transform.localScale = ultimateOriginalScale;
     }
 
+    // Called immediately when the LAST enemy of the wave dies.
+    // This is the single end-of-wave reset point; the next wave starts only after the inter-wave pause.
+    public void ResetCombatStateAfterWave()
+    {
+        if (!Application.isPlaying) return;
+
+        StopAllCoroutines();
+        ultimateRoutine = null;
+        ultimateVisualRoutine = null;
+        ultimateActive = false;
+        ultimateCooldownRemaining = 0f;
+
+        currentTarget = null;
+        hasShotAtCurrentTarget = false;
+        isAttacking = false;
+        attackTimer = 0f;
+
+        RestoreUltimateVisual();
+        if (spriteRenderer == null) spriteRenderer = GetComponent<SpriteRenderer>();
+        if (spriteRenderer != null && readySprite != null)
+            spriteRenderer.sprite = readySprite;
+
+        UpdateUltimateBar();
+    }
+
     // Called by WaveSpawner when a NEW wave actually starts. Every wave begins
     // with the ultimate fully ready, regardless of when it was used last wave.
     public void ResetUltimateForNewWave()
@@ -506,6 +651,11 @@ public class Hero : MonoBehaviour
 
     void UpdateUltimateRuntime()
     {
+        // The shared Bow Master ultimate bar must be controlled ONLY by Bow Master.
+        // Victoria/Crossbowman also run Hero.Update(), and previously they could find
+        // the same UI object and immediately hide it again, causing a one-frame flash.
+        if (!IsBowMaster()) return;
+
         // Cooldown only matters during Battle. It will be reset by WaveSpawner
         // at the beginning of every new wave.
         if (GameStateManager.Instance != null &&
@@ -513,67 +663,57 @@ public class Hero : MonoBehaviour
             ultimateCooldownRemaining > 0f)
             ultimateCooldownRemaining = Mathf.Max(0f, ultimateCooldownRemaining - Time.deltaTime);
 
-        if (evolution1Purchased && ultimateUnlocked && isInstalled)
-        {
-            EnsureUltimateBar();
-            UpdateUltimateBar();
-        }
-        else if (ultimateBarRoot != null)
-        {
-            ultimateBarRoot.SetActive(false);
-        }
+        EnsureUltimateBar();
+        UpdateUltimateBar();
+    }
+
+    bool IsBowMaster()
+    {
+        return string.Equals(heroName?.Trim(), "Bow Master", System.StringComparison.OrdinalIgnoreCase);
     }
 
     void EnsureUltimateBar()
     {
+        if (!IsBowMaster()) return;
         if (ultimateBarRoot != null && ultimateBarFill != null) return;
 
-        // Uses the UI bar created manually on the Canvas:
-        // HeroUltimateBarBackground -> HeroUltimateBarFill.
-        Transform background = FindSceneTransform("HeroUltimateBarBackground");
-        Transform fill = FindSceneTransform("HeroUltimateBarFill");
+        // Use the manually-created UI. Support both the old and new names so
+        // renaming the objects can never break the ultimate bar again.
+        Transform background = FindSceneTransform("BowMasterUltimateBarBG");
+        if (background == null)
+            background = FindSceneTransform("HeroUltimateBarBackground");
+        if (background == null) return;
 
-        // If the manually-created bar is missing/broken, build a small runtime bar
-        // on the existing screen-space Canvas. This makes the ultimate indicator
-        // reliable and does not touch the user's saved UI layout.
-        if (background == null || fill == null || fill.GetComponent<Image>() == null)
+        Transform fill = null;
+        foreach (Transform child in background.GetComponentsInChildren<Transform>(true))
         {
-            Canvas canvas = FindFirstObjectByType<Canvas>();
-            if (canvas == null) return;
-
-            GameObject bgGO = new GameObject("HeroUltimateBarBackground", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-            bgGO.transform.SetParent(canvas.transform, false);
-            RectTransform bgRT = bgGO.GetComponent<RectTransform>();
-            bgRT.sizeDelta = new Vector2(70f, 7f);
-            Image bgImage = bgGO.GetComponent<Image>();
-            bgImage.color = new Color(0.10f, 0.10f, 0.10f, 0.85f);
-            bgImage.raycastTarget = false;
-
-            GameObject fillGO = new GameObject("HeroUltimateBarFill", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-            fillGO.transform.SetParent(bgGO.transform, false);
-            RectTransform fillRT = fillGO.GetComponent<RectTransform>();
-            fillRT.anchorMin = new Vector2(0f, 0f);
-            fillRT.anchorMax = new Vector2(1f, 1f);
-            fillRT.pivot = new Vector2(0f, 0.5f);
-            fillRT.offsetMin = Vector2.zero;
-            fillRT.offsetMax = Vector2.zero;
-            Image fillImage = fillGO.GetComponent<Image>();
-            fillImage.color = new Color(0.15f, 1f, 0.20f, 1f);
-            fillImage.raycastTarget = false;
-
-            background = bgGO.transform;
-            fill = fillGO.transform;
+            if (child == null) continue;
+            if (child.name == "BowMasterUltimateBarFill" || child.name == "HeroUltimateBarFill")
+            {
+                fill = child;
+                break;
+            }
         }
+        if (fill == null) return;
+
+        Image fillImage = fill.GetComponent<Image>();
+        if (fillImage == null) return;
 
         ultimateBarRoot = background.gameObject;
         ultimateBarRect = background as RectTransform;
-        ultimateBarFill = fill.GetComponent<Image>();
-        ultimateBarCanvas = background.GetComponentInParent<Canvas>();
+        ultimateBarFill = fillImage;
+        ultimateBarCanvas = background.GetComponentInParent<Canvas>(true);
 
-        // Recalculate from a known offset every time the bar is bound. The bar
-        // sits just above the installed hero and follows him if the slot changes.
-        ultimateBarOffsetCaptured = false;
-        CaptureUltimateBarOffset();
+        // Keep the position/size exactly as configured in the Unity Inspector.
+        // Code controls only visibility and cooldown fill.
+        ultimateBarFill.type = Image.Type.Filled;
+        ultimateBarFill.fillMethod = Image.FillMethod.Horizontal;
+        ultimateBarFill.fillOrigin = (int)Image.OriginHorizontal.Left;
+        ultimateBarFill.fillClockwise = true;
+        ultimateBarFill.raycastTarget = false;
+
+        Image bgImage = background.GetComponent<Image>();
+        if (bgImage != null) bgImage.raycastTarget = false;
     }
 
     Transform FindSceneTransform(string objectName)
@@ -586,46 +726,10 @@ public class Hero : MonoBehaviour
         return null;
     }
 
-    void CaptureUltimateBarOffset()
-    {
-        if (ultimateBarRect == null || ultimateBarCanvas == null || ultimateBarRect.parent == null) return;
-
-        RectTransform parentRect = ultimateBarRect.parent as RectTransform;
-        if (parentRect == null) return;
-
-        Camera uiCamera = ultimateBarCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : ultimateBarCanvas.worldCamera;
-        Camera worldCamera = Camera.main;
-        if (worldCamera == null) return;
-
-        Vector2 screenPoint = worldCamera.WorldToScreenPoint(transform.position);
-        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(parentRect, screenPoint, uiCamera, out Vector2 heroLocalPoint))
-        {
-            // Fixed screen-space offset: directly above the hero. This avoids the
-            // bar disappearing because of an old/manual anchored position.
-            ultimateBarScreenOffset = new Vector2(0f, 45f);
-            ultimateBarRect.anchoredPosition = heroLocalPoint + ultimateBarScreenOffset;
-            ultimateBarOffsetCaptured = true;
-        }
-    }
-
-    void FollowHeroWithUltimateBar()
-    {
-        if (ultimateBarRect == null || ultimateBarCanvas == null || ultimateBarRect.parent == null) return;
-        if (!ultimateBarOffsetCaptured) CaptureUltimateBarOffset();
-        if (!ultimateBarOffsetCaptured) return;
-
-        RectTransform parentRect = ultimateBarRect.parent as RectTransform;
-        Camera uiCamera = ultimateBarCanvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : ultimateBarCanvas.worldCamera;
-        Camera worldCamera = Camera.main;
-        if (parentRect == null || worldCamera == null) return;
-
-        Vector2 screenPoint = worldCamera.WorldToScreenPoint(transform.position);
-        if (RectTransformUtility.ScreenPointToLocalPointInRectangle(parentRect, screenPoint, uiCamera, out Vector2 heroLocalPoint))
-            ultimateBarRect.anchoredPosition = heroLocalPoint + ultimateBarScreenOffset;
-    }
-
     void UpdateUltimateBar()
     {
+        if (!IsBowMaster()) return;
+        EnsureUltimateBar();
         if (ultimateBarRoot == null || ultimateBarFill == null) return;
 
         bool inBattle = GameStateManager.Instance != null &&
@@ -633,23 +737,16 @@ public class Hero : MonoBehaviour
              GameStateManager.Instance.currentState == GameStateManager.GameState.Paused);
 
         bool show = inBattle && evolution1Purchased && ultimateUnlocked && isPurchased && isInstalled;
-        ultimateBarRoot.SetActive(show);
+        if (ultimateBarRoot.activeSelf != show)
+            ultimateBarRoot.SetActive(show);
         if (!show) return;
 
-        FollowHeroWithUltimateBar();
-
-        // Ready = full green bar. Pressing the ultimate resets it to zero,
-        // then it fills from 0 to 1 during the complete 10 second cooldown.
+        // Ready = 100%. On activation cooldownRemaining becomes 10 sec, so the
+        // bar immediately drops to 0 and then fills back to 1 during cooldown.
         float progress = ultimateCooldown <= 0f
             ? 1f
             : 1f - Mathf.Clamp01(ultimateCooldownRemaining / ultimateCooldown);
         ultimateBarFill.fillAmount = progress;
-        RectTransform fillRect = ultimateBarFill.rectTransform;
-        fillRect.anchorMin = new Vector2(0f, 0f);
-        fillRect.anchorMax = new Vector2(progress, 1f);
-        fillRect.offsetMin = Vector2.zero;
-        fillRect.offsetMax = Vector2.zero;
     }
-
 
 }

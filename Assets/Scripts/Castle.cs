@@ -1,4 +1,4 @@
-using TMPro;
+﻿using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -363,6 +363,13 @@ public class Castle : MonoBehaviour
         currentMana -= amount;
         UpdateUI();
         return true;
+    }
+
+    public void AddHealth(float amount)
+    {
+        if (amount <= 0f) return;
+        currentHealth = Mathf.Clamp(currentHealth + amount, 0f, maxHealth);
+        UpdateUI();
     }
 
     public void AddMana(float amount)

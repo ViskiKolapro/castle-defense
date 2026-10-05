@@ -14,6 +14,10 @@ public static class WorldInputGuard
                IsActive("EvolutionPanel") ||
                IsActive("EvolutionInfoPanel") ||
                IsActive("EvolutionInfoPanel2") ||
+               IsActive("VictoriaEvolutionPanel") ||
+               IsActive("VictoriaRedElfEvolution1InfoPanel") ||
+               IsActive("VictoriaRedElfEvolution2InfoPanel") ||
+               IsActive("VictoriaBlueElfEvolution1InfoPanel") ||
                IsActive("PausePanel") ||
                IsActive("UpdatePanel");
     }

@@ -152,11 +152,11 @@ public class WaveSpawner : MonoBehaviour
 
     void ClearBattleObjects()
     {
-        Enemy[] enemies = FindObjectsByType<Enemy>(FindObjectsSortMode.None);
+        Enemy[] enemies = FindObjectsByType<Enemy>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
         foreach (Enemy enemy in enemies)
             if (enemy != null) Destroy(enemy.gameObject);
 
-        Projectile[] projectiles = FindObjectsByType<Projectile>(FindObjectsSortMode.None);
+        Projectile[] projectiles = FindObjectsByType<Projectile>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
         foreach (Projectile projectile in projectiles)
             if (projectile != null) Destroy(projectile.gameObject);
     }
@@ -165,11 +165,6 @@ public class WaveSpawner : MonoBehaviour
     {
         if (currentWave > 1)
             yield return new WaitForSeconds(timeBetweenWaves);
-
-        // Every new wave starts with hero ultimates fully ready.
-        Hero[] heroes = FindObjectsByType<Hero>(FindObjectsSortMode.None);
-        foreach (Hero hero in heroes)
-            if (hero != null) hero.ResetUltimateForNewWave();
 
         float waveDuration = GetWaveDuration(currentWave);
         int enemiesToSpawn = GetEnemyCount(currentWave);
@@ -220,10 +215,9 @@ public class WaveSpawner : MonoBehaviour
 
         lastCompletedWave = currentWave;
 
-        // Каждая полностью пройденная волна восстанавливает замок и ману.
-        Castle castle = FindAnyObjectByType<Castle>();
-        if (castle != null)
-            castle.RestoreToFull();
+        // Последний враг умер: сразу возвращаем бой в исходное состояние.
+        // Пауза timeBetweenWaves происходит уже ПОСЛЕ этого сброса, перед следующей волной.
+        ResetCombatStateAfterWave();
 
         OnWaveCompleted?.Invoke(lastCompletedWave);
 
@@ -237,6 +231,29 @@ public class WaveSpawner : MonoBehaviour
 
         if (battleStarted)
             StartCoroutine(RunWave());
+    }
+
+    void ResetCombatStateAfterWave()
+    {
+        // Замок и глобальная мана сразу полностью восстанавливаются.
+        Castle castle = FindAnyObjectByType<Castle>();
+        if (castle != null)
+            castle.RestoreToFull();
+
+        // Все герои: снять временную ульту/визуал, очистить цель и сделать ульту готовой.
+        Hero[] heroes = FindObjectsByType<Hero>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+        foreach (Hero hero in heroes)
+            if (hero != null) hero.ResetCombatStateAfterWave();
+
+        // Городские лучники тоже возвращаются в Ready и сбрасывают текущую атаку.
+        CityArcherUnit[] archers = FindObjectsByType<CityArcherUnit>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+        foreach (CityArcherUnit archer in archers)
+            if (archer != null) archer.ResetCombatStateAfterWave();
+
+        // После окончания волны не оставляем летящие/застрявшие стрелы на поле.
+        Projectile[] projectiles = FindObjectsByType<Projectile>(FindObjectsInactive.Exclude, FindObjectsSortMode.None);
+        foreach (Projectile projectile in projectiles)
+            if (projectile != null) Destroy(projectile.gameObject);
     }
 
     float GetWaveDuration(int wave)

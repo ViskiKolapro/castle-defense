@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 [System.Serializable]
 public class CityArcherSquad
@@ -11,7 +11,7 @@ public class CityArcherSquad
     [Range(0, 10)] public int archerCount = 0;
 
     [Header("Base stats of ONE archer")]
-    public float baseDamage = 20f;
+    public float baseDamage = 25f;
     [Tooltip("Полный интервал между выстрелами одного городского лучника.")]
     public float attackInterval = 0.8f;
     public float projectileSpeed = 8f;
@@ -21,7 +21,7 @@ public class CityArcherSquad
     [Min(1f)] public float critMultiplier = 2f;
 
     [Header("Upgrade - balance in Inspector")]
-    public float damagePerLevelAfterTenArchers = 2f;
+    public float damagePerLevelAfterTenArchers = 10f;
     [Tooltip("Цена первого лучника.")] public int firstArcherCost = 10;
     [Tooltip("На сколько растёт цена каждого следующего лучника до 10/10.")] public int archerCostStep = 10;
     [Tooltip("Цена первого улучшения после 10/10.")] public int postTenStartCost = 150;
@@ -35,7 +35,7 @@ public class CityArcherSquad
     {
         get
         {
-            int damageLevels = Mathf.Max(0, level - 10);
+            int damageLevels = Mathf.Max(0, level - 1);
             return baseDamage + damageLevels * damagePerLevelAfterTenArchers;
         }
     }

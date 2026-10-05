@@ -28,7 +28,7 @@ public class HeroPanelController : MonoBehaviour
     public TMP_Text installButtonText;
     public Button upgradeButton;
     public TMP_Text upgradeButtonText;
-    [Tooltip("Показывается только когда открыта карточка Bow Master.")]
+    [Tooltip("Показывается для героев, у которых уже есть дерево эволюций.")]
     public Button evolutionButton;
 
     private Hero selectedHero;
@@ -76,6 +76,8 @@ public class HeroPanelController : MonoBehaviour
         ClosePanel();
         BowMasterEvolutionController evo = BowMasterEvolutionController.EnsureFor(this);
         if (evo != null) evo.ResetPanelsForPlay();
+        VictoriaEvolutionController victoriaEvo = VictoriaEvolutionController.EnsureFor(this);
+        if (victoriaEvo != null) victoriaEvo.ResetPanelsForPlay();
     }
 
     // Открытие по клику на установленного героя: статистика + список героев справа.
@@ -171,7 +173,7 @@ public class HeroPanelController : MonoBehaviour
             return;
 
         if (evolutionButton != null)
-            evolutionButton.gameObject.SetActive(selectedHero == bowMaster);
+            evolutionButton.gameObject.SetActive(selectedHero == bowMaster || selectedHero == victoria);
 
         if (heroNameText != null)
             heroNameText.text = selectedHero.heroName;
@@ -184,12 +186,12 @@ public class HeroPanelController : MonoBehaviour
             if (selectedHero == bowMaster && selectedHero.evolution1Purchased)
             {
                 string speed = selectedHero.attackCooldown.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture).Replace('.', ',');
-                heroDamageText.text = "Урон: " + Mathf.RoundToInt(selectedHero.damage) +
+                heroDamageText.text = "Урон: " + Mathf.RoundToInt(selectedHero.EffectiveDamage) +
                     "\nСкорость атаки: " + speed;
             }
             else
             {
-                heroDamageText.text = "Урон: " + Mathf.RoundToInt(selectedHero.damage);
+                heroDamageText.text = "Урон: " + Mathf.RoundToInt(selectedHero.EffectiveDamage);
             }
         }
 
@@ -318,7 +320,7 @@ public class HeroPanelController : MonoBehaviour
         if (installButton != null) installButton.gameObject.SetActive(visible);
         if (upgradeButton != null) upgradeButton.gameObject.SetActive(visible);
         if (evolutionButton != null)
-            evolutionButton.gameObject.SetActive(visible && selectedHero == bowMaster);
+            evolutionButton.gameObject.SetActive(visible && (selectedHero == bowMaster || selectedHero == victoria));
     }
 
     void FindAndHookEvolutionButton()
@@ -343,10 +345,18 @@ public class HeroPanelController : MonoBehaviour
 
     void OpenEvolutionForSelectedHero()
     {
-        // Пока реализована ветка только Bow Master.
-        if (selectedHero != bowMaster) return;
-        BowMasterEvolutionController controller = BowMasterEvolutionController.EnsureFor(this);
-        if (controller != null) controller.OpenEvolutionTree();
+        if (selectedHero == bowMaster)
+        {
+            BowMasterEvolutionController controller = BowMasterEvolutionController.EnsureFor(this);
+            if (controller != null) controller.OpenEvolutionTree();
+            return;
+        }
+
+        if (selectedHero == victoria)
+        {
+            VictoriaEvolutionController controller = VictoriaEvolutionController.EnsureFor(this);
+            if (controller != null) controller.OpenEvolutionTree();
+        }
     }
 
     void SetPanelBackgroundVisible(bool visible)

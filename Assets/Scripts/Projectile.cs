@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using UnityEngine;
 
 public class Projectile : MonoBehaviour
@@ -20,6 +20,7 @@ public class Projectile : MonoBehaviour
 
     private Enemy target;
     private float damage;
+    private Hero sourceHero;
     private bool launched;
     private bool finished;
     private Vector3 lastKnownTargetPosition;
@@ -28,9 +29,10 @@ public class Projectile : MonoBehaviour
     private float initialDistance;
     private SpriteRenderer spriteRenderer;
 
-    public void SetTarget(Enemy newTarget, float newDamage, float newSpeed)
+    public void SetTarget(Enemy newTarget, float newDamage, float newSpeed, Hero source = null)
     {
         target = newTarget;
+        sourceHero = source;
         damage = newDamage;
         speed = newSpeed * Mathf.Max(0.01f, flightSpeedMultiplier);
         launched = true;
@@ -75,7 +77,8 @@ public class Projectile : MonoBehaviour
             if (targetAlive)
             {
                 target.ReleaseIncomingDamage(damage);
-                target.TakePreparedDamage(damage);
+                float actualDamage = target.TakePreparedDamage(damage);
+                if (sourceHero != null) sourceHero.OnProjectileHit(target, actualDamage);
                 finished = true;
                 Destroy(gameObject);
             }

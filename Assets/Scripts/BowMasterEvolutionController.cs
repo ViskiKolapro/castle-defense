@@ -163,6 +163,7 @@ public class BowMasterEvolutionController : MonoBehaviour
             // Purchased forever: click installs it; clicking the active form removes it back to base.
             bowMaster.SetActiveEvolution(bowMaster.activeEvolution == 1 ? 0 : 1);
         }
+        SaveEvolutionState();
         RefreshVisualState(); if (heroPanel != null) heroPanel.Refresh();
     }
 
@@ -179,6 +180,7 @@ public class BowMasterEvolutionController : MonoBehaviour
             // Removing Physical II falls back to the already-owned Evolution I.
             bowMaster.SetActiveEvolution(bowMaster.activeEvolution == 2 ? 1 : 2);
         }
+        SaveEvolutionState();
         RefreshVisualState(); if (heroPanel != null) heroPanel.Refresh();
     }
 
@@ -186,13 +188,20 @@ public class BowMasterEvolutionController : MonoBehaviour
     {
         if (bowMaster == null) return;
         Color gold = new Color(1f, 0.78f, 0.12f, 1f), dark = new Color(0.25f, 0.25f, 0.25f, 1f);
-        if (evolutionLine1 != null) evolutionLine1.color = bowMaster.evolution1Purchased ? gold : dark;
-        Color physical = bowMaster.evolution2Purchased ? gold : dark;
+        // Gold means ACTIVE evolution path, not merely purchased ownership.
+        if (evolutionLine1 != null) evolutionLine1.color = bowMaster.activeEvolution >= 1 ? gold : dark;
+        Color physical = bowMaster.activeEvolution == 2 ? gold : dark;
         if (evolutionLine2 != null) evolutionLine2.color = physical;
         if (evolutionLine3 != null) evolutionLine3.color = physical;
         if (evolutionLine4 != null) evolutionLine4.color = physical;
         if (buy1Button != null) buy1Button.interactable = bowMaster.evolution1Purchased || (PlayerProgress.Instance != null && PlayerProgress.Instance.emeralds >= 10);
         if (buy2Button != null) buy2Button.interactable = bowMaster.evolution1Purchased && (bowMaster.evolution2Purchased || (PlayerProgress.Instance != null && PlayerProgress.Instance.emeralds >= 20));
+    }
+
+    void SaveEvolutionState()
+    {
+        SaveSystem save = FindAnyObjectByType<SaveSystem>();
+        if (save != null) save.Save();
     }
 
     void EnsureEvolutionBlocker()
